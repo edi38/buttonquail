@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# bqvim
+
+repos=(
+  "https://github.com/tpope/vim-sensible.git;.vim/bundle/vim-sensible"
+  "https://github.com/vim-airline/vim-airline;.vim/bundle/vim-airline"
+  "https://github.com/vim-airline/vim-airline-themes;.vim/bundle/vim-airline-themes"
+  "https://github.com/tpope/vim-fugitive.git;.vim/bundle/vim-fugitive"
+  "https://github.com/vim-pandoc/vim-pandoc.git;.vim/bundle/vim-pandoc"
+  "https://github.com/vim-pandoc/vim-pandoc-syntax.git;.vim/bundle/vim-pandoc-syntax"
+  "https://github.com/ervandew/supertab.git;.vim/bundle/supertab"
+)
+
+files=(
+  "http://ftp.vim.org/vim/runtime/spell/de.utf-8.spl;.vim/spell/de.utf-8.spl"
+  "http://ftp.vim.org/vim/runtime/spell/de.utf-8.sug;.vim/spell/de.utf-8.sug"
+  "https://raw.githubusercontent.com/w0ng/vim-hybrid/master/colors/hybrid.vim;.vim/colors/hybrid.vim"
+  "https://tpo.pe/pathogen.vim;.vim/autoload/pathogen.vim"
+  "https://gist.githubusercontent.com/edi38/6974662/raw/;.vimrc"
+)
+
+
+function getfile {
+  local url="${1}"
+  local path="${2}"
+
+  echo "Get file '${path}'"
+
+  curl -LSso "${HOME}/${path}" "${url}"
+}
+
+
+function getrepo {
+  local url="${1}"
+  local path="${2}"
+
+  echo "Get repo '${path}'"
+
+  if [[ -d "${HOME}/${path}" && ! -L "${HOME}/${path}" ]] ; then
+    git -C "${HOME}/${path}" pull
+  else
+    git clone "${url}" "${HOME}/${path}"
+  fi
+}
+
+
+mkdir -p ~/.vim/{autoload,bundle,colors,spell}
+
+for fileline in "${files[@]}"; do
+  IFS=';'; file=($fileline); unset IFS;
+  getfile ${file[0]} ${file[1]}
+done
+
+for repoline in "${repos[@]}"; do
+  IFS=';'; repo=($repoline); unset IFS;
+  getrepo "${repo[0]}" "${repo[1]}"
+done

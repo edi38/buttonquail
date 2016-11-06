@@ -4,8 +4,8 @@
 
 repos=(
   "https://github.com/tpope/vim-sensible.git;.vim/bundle/vim-sensible"
-  "https://github.com/vim-airline/vim-airline;.vim/bundle/vim-airline"
-  "https://github.com/vim-airline/vim-airline-themes;.vim/bundle/vim-airline-themes"
+  "https://github.com/vim-airline/vim-airline.git;.vim/bundle/vim-airline"
+  "https://github.com/vim-airline/vim-airline-themes.git;.vim/bundle/vim-airline-themes"
   "https://github.com/tpope/vim-fugitive.git;.vim/bundle/vim-fugitive"
   "https://github.com/vim-pandoc/vim-pandoc.git;.vim/bundle/vim-pandoc"
   "https://github.com/vim-pandoc/vim-pandoc-syntax.git;.vim/bundle/vim-pandoc-syntax"
@@ -19,6 +19,31 @@ files=(
   "https://tpo.pe/pathogen.vim;.vim/autoload/pathogen.vim"
   "https://gist.githubusercontent.com/edi38/6974662/raw/;.vimrc"
 )
+
+function checkgitpath {
+  local gitpath="${1}"
+
+  echo "Check gitpath '${gitpath}'"
+
+  if [[ ! -d $(dirname "${HOME}/${gitpath}") ]]; then
+    echo "  parent directory does not exist."
+    exit 1
+  fi
+
+  if [[ ! -e "${HOME}/${gitpath}" ]]; then
+    return
+  fi
+
+  if [[ -L "${HOME}/${gitpath}" ]]; then
+    echo "  is a link"
+    exit 1
+  fi
+
+  if [[ ! -d "${HOME}/${gitpath}/.git" ]]; then
+    echo "  missing .git directory"
+    exit 1
+  fi
+}
 
 
 function getfile {
@@ -37,7 +62,7 @@ function getrepo {
 
   echo "Get repo '${path}'"
 
-  if [[ -d "${HOME}/${path}" && ! -L "${HOME}/${path}" ]] ; then
+  if [[ -d "${HOME}/${path}" ]] ; then
     git -C "${HOME}/${path}" pull
   else
     git clone "${url}" "${HOME}/${path}"
@@ -47,11 +72,19 @@ function getrepo {
 
 mkdir -p ~/.vim/{autoload,bundle,colors,spell}
 
+# check gitpathes
+for repoline in "${repos[@]}"; do
+  IFS=';'; repo=($repoline); unset IFS;
+  checkgitpath "${repo[1]}"
+done
+
+# get files
 for fileline in "${files[@]}"; do
   IFS=';'; file=($fileline); unset IFS;
   getfile ${file[0]} ${file[1]}
 done
 
+# get repos
 for repoline in "${repos[@]}"; do
   IFS=';'; repo=($repoline); unset IFS;
   getrepo "${repo[0]}" "${repo[1]}"

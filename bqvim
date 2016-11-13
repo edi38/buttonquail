@@ -2,90 +2,155 @@
 
 # bqvim
 
-repos=(
-  "https://github.com/tpope/vim-sensible.git;.vim/bundle/vim-sensible"
-  "https://github.com/vim-airline/vim-airline.git;.vim/bundle/vim-airline"
-  "https://github.com/vim-airline/vim-airline-themes.git;.vim/bundle/vim-airline-themes"
-  "https://github.com/tpope/vim-fugitive.git;.vim/bundle/vim-fugitive"
-  "https://github.com/vim-pandoc/vim-pandoc.git;.vim/bundle/vim-pandoc"
-  "https://github.com/vim-pandoc/vim-pandoc-syntax.git;.vim/bundle/vim-pandoc-syntax"
-  "https://github.com/ervandew/supertab.git;.vim/bundle/supertab"
-)
+BQ_CONFIG_PATH="config.json"
+BQ_CONFIG_ROOT='["software"]["vim"]'
 
-files=(
-  "http://ftp.vim.org/vim/runtime/spell/de.utf-8.spl;.vim/spell/de.utf-8.spl"
-  "http://ftp.vim.org/vim/runtime/spell/de.utf-8.sug;.vim/spell/de.utf-8.sug"
-  "https://raw.githubusercontent.com/w0ng/vim-hybrid/master/colors/hybrid.vim;.vim/colors/hybrid.vim"
-  "https://tpo.pe/pathogen.vim;.vim/autoload/pathogen.vim"
-  "https://gist.githubusercontent.com/edi38/6974662/raw/;.vimrc"
-)
+check_bq_path_config () {
 
-function checkgitpath {
-  local gitpath="${1}"
+  # TODO check content of variable
 
-  echo "Check gitpath '${gitpath}'"
+  :
+}
 
-  if [[ ! -d $(dirname "${HOME}/${gitpath}") ]]; then
-    echo "  parent directory does not exist."
-    exit 1
+
+is_file_path () {
+
+  # check file path is valid
+
+  local file_path="${1}"
+
+  file "${HOME}/${file_path}" | egrep -q -v " \(No such file or directory\)$"
+
+  return $?
+}
+
+
+is_file_type () {
+
+  # check a file type is valid
+
+  local file_path="${1}"
+  local file_type="${2}"
+
+  file "${HOME}/${file_path}" | cut -c$((${#HOME} + 1 + ${#file_path} + 3))- | egrep -q "^${file_type}$"
+
+  return $?
+}
+
+
+is_config_path () {
+
+  # check a config path exists or not
+
+  local json_path="${1}"
+
+  cat $BQ_CONFIG_PATH \
+    | python -c "import sys, json; print json.load(sys.stdin)${json_path}" \
+    &> /dev/null
+
+  return $?
+}
+
+
+get_no_config_values () {
+
+  # count number of config values
+
+  local json_path="${1}"
+
+  if ! is_config_path "${json_path}"; then
+    echo 0
   fi
 
-  if [[ ! -e "${HOME}/${gitpath}" ]]; then
+  cat $BQ_CONFIG_PATH \
+    | python -c "import sys, json; print len(json.load(sys.stdin)${json_path})" \
+    2> /dev/null
+}
+
+
+get_config_value () {
+
+  # get a value fron the configuration file
+
+  local json_path="${1}"
+
+  if ! is_config_path "${json_path}"; then
+    echo
+  fi
+
+  cat $BQ_CONFIG_PATH \
+    | python -c "import sys, json; print json.load(sys.stdin)${json_path}" \
+    2> /dev/null
+}
+
+
+bq_run_files () {
+
+  # make files
+
+  echo "files"
+
+  if ! is_config_path $BQ_CONFIG_ROOT'["files"]'; then
+    echo "  - nothing to do"
     return
   fi
 
-  if [[ -L "${HOME}/${gitpath}" ]]; then
-    echo "  is a link"
-    exit 1
-  fi
+  local no_files=$(($(get_no_config_values $BQ_CONFIG_ROOT'["files"]')))
+  local no_files_finished=0
 
-  if [[ ! -d "${HOME}/${gitpath}/.git" ]]; then
-    echo "  missing .git directory"
-    exit 1
-  fi
+  for (( counter=1; counter<=$no_files; counter++ )); do
+
+    local config_root=$BQ_CONFIG_ROOT'["files"]['$(( $counter - 1))']'
+    local name=$(get_config_value $config_root'["name"]')
+    local path=$(get_config_value $config_root'["path"]')
+    local type=$(get_config_value $config_root'["type"]')
+    local loader=$(get_config_value $config_root'["loader"]')
+    local url=$(get_config_value $config_root'["url"]')
+
+    if ! is_file_path "${path}" && [[ ${loader} = "git" ]]; then
+
+      echo "   - '${name}' clone with git"
+      git clone "${url}" "${HOME}/${path}" 2>/dev/null
+      continue
+
+    fi
+
+    if ! is_file_path "${path}" && [[ ${loader} = "curl" ]]; then
+
+      echo "   - '${name}' download with curl"
+      curl -LSso "${HOME}/${path}" "${url}" 1>/dev/null
+      continue
+
+    fi
+
+    if is_file_path "${path}" && is_file_type "${path}" "${type}" && [[ "${loader}" = "git" ]]; then
+
+      git -C "${HOME}/${path}" remote update 1>/dev/null
+      if [[ $(git -C "${HOME}/${path}" status -uno --porcelain) ]]; then
+
+        echo "   - '${name}' update via git"
+        git -C "${HOME}/${path}" pull
+        continue
+
+      fi
+
+    fi
+
+    echo "   - '${name}' not changed"
+
+  done
 }
 
 
-function getfile {
-  local url="${1}"
-  local path="${2}"
+main () {
 
-  echo "Get file '${path}'"
+  check_bq_path_config
 
-  curl -LSso "${HOME}/${path}" "${url}"
+  bq_run_files
+
+#  mkdir -p ~/.vim/{autoload,bundle,colors,spell}
+#
 }
 
 
-function getrepo {
-  local url="${1}"
-  local path="${2}"
-
-  echo "Get repo '${path}'"
-
-  if [[ -d "${HOME}/${path}" ]] ; then
-    git -C "${HOME}/${path}" pull
-  else
-    git clone "${url}" "${HOME}/${path}"
-  fi
-}
-
-
-mkdir -p ~/.vim/{autoload,bundle,colors,spell}
-
-# check gitpathes
-for repoline in "${repos[@]}"; do
-  IFS=';'; repo=($repoline); unset IFS;
-  checkgitpath "${repo[1]}"
-done
-
-# get files
-for fileline in "${files[@]}"; do
-  IFS=';'; file=($fileline); unset IFS;
-  getfile ${file[0]} ${file[1]}
-done
-
-# get repos
-for repoline in "${repos[@]}"; do
-  IFS=';'; repo=($repoline); unset IFS;
-  getrepo "${repo[0]}" "${repo[1]}"
-done
+main "${@}"

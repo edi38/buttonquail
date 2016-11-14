@@ -107,29 +107,37 @@ bq_run_files () {
     local loader=$(get_config_value $config_root'["loader"]')
     local url=$(get_config_value $config_root'["url"]')
 
-    if ! is_file_path "${path}" && [[ ${loader} = "git" ]]; then
+    if ! is_file_path "${path}" && [[ -z "${loader}" && "${type}" = "directory" ]]; then
 
-      echo "   - '${name}' clone with git"
-      git clone "${url}" "${HOME}/${path}" 2>/dev/null
+      echo "   - '${name}' create directory"
+      # mkdir "${HOME}/${path}" 2>/dev/null
       continue
 
     fi
 
-    if ! is_file_path "${path}" && [[ ${loader} = "curl" ]]; then
+    if ! is_file_path "${path}" && [[ ${loader} = 'git' ]]; then
+
+      echo "   - '${name}' clone with git"
+      # git clone "${url}" "${HOME}/${path}" 2>/dev/null
+      continue
+
+    fi
+
+    if ! is_file_path "${path}" && [[ ${loader} = 'curl' ]]; then
 
       echo "   - '${name}' download with curl"
-      curl -LSso "${HOME}/${path}" "${url}" 1>/dev/null
+      # curl -LSso "${HOME}/${path}" "${url}" 1>/dev/null
       continue
 
     fi
 
     if is_file_path "${path}" && is_file_type "${path}" "${type}" && [[ "${loader}" = "git" ]]; then
 
-      git -C "${HOME}/${path}" remote update 1>/dev/null
+      # git -C "${HOME}/${path}" remote update 1>/dev/null
       if [[ $(git -C "${HOME}/${path}" status -uno --porcelain) ]]; then
 
         echo "   - '${name}' update via git"
-        git -C "${HOME}/${path}" pull
+        # git -C "${HOME}/${path}" pull
         continue
 
       fi
@@ -147,9 +155,6 @@ main () {
   check_bq_path_config
 
   bq_run_files
-
-#  mkdir -p ~/.vim/{autoload,bundle,colors,spell}
-#
 }
 
 

@@ -13,32 +13,47 @@ check_bq_path_config () {
 }
 
 
-is_file_path () {
-
-  # check file path is valid
-
-  local file_path="${1}"
-
-  file "${HOME}/${file_path}" | egrep -q -v " \(No such file or directory\)$"
-
-  return $?
+# Get status, whether the file path exists or not.
+get_path_exists () {
+  local path="${1}"
+  file "${HOME}/${path}" | egrep -q -v " \(No such file or directory\)$"
+  echo $?
 }
 
 
-is_file_type () {
-
-  # check a file type is valid
-
-  local file_path="${1}"
-  local file_type="${2}"
-
-  file "${HOME}/${file_path}" | cut -c$((${#HOME} + 1 + ${#file_path} + 3))- | egrep -q "^${file_type}$"
-
-  return $?
+# Get md5 hash from path.
+get_path_md5 () {
+  local path="${1}"
+  local path_exists="${2:-1}"
+  if [[ "${path_exists}" != "0" ]]; then
+    echo ""
+    return 1
+  fi
+  echo $(md5 -q "${HOME}/${path}" 2>/dev/null)
 }
 
+# Get status, whether the URL exists or not.
+get_url_exists () {
+  local url="${1}"
+  if [[ -z "${url}" ]]; then
+    return 1
+  fi
+  curl -s --head "${url}" | head -n 1 | grep "HTTP/1.[01] [23].." > /dev/null
+  echo $?
+}
 
-is_config_path () {
+# Get md5 hash from url.
+get_url_md5 () {
+  local url="${1}"
+  local url_exists="${2:-1}"
+  if [[ "${path_exists}" != "0" ]]; then
+    echo ""
+    return 1
+  fi
+  echo $(curl -s "${url}" | md5)
+}
+
+existing_config_path () {
 
   # check a config path exists or not
 
@@ -58,7 +73,7 @@ get_no_config_values () {
 
   local json_path="${1}"
 
-  if ! is_config_path "${json_path}"; then
+  if ! existing_config_path "${json_path}"; then
     echo 0
   fi
 
@@ -74,7 +89,7 @@ get_config_value () {
 
   local json_path="${1}"
 
-  if ! is_config_path "${json_path}"; then
+  if ! existing_config_path "${json_path}"; then
     echo
   fi
 
@@ -90,7 +105,7 @@ bq_run_files () {
 
   echo "files"
 
-  if ! is_config_path $BQ_CONFIG_ROOT'["files"]'; then
+  if ! existing_config_path $BQ_CONFIG_ROOT'["files"]'; then
     echo "  - nothing to do"
     return
   fi
@@ -103,11 +118,18 @@ bq_run_files () {
     local config_root=$BQ_CONFIG_ROOT'["files"]['$(( $counter - 1))']'
     local name=$(get_config_value $config_root'["name"]')
     local path=$(get_config_value $config_root'["path"]')
-    local type=$(get_config_value $config_root'["type"]')
+    local path_exists=$(get_path_exists "${path}")
+    local path_md5=$(get_path_md5 "${path}" "${path_exists}")
     local loader=$(get_config_value $config_root'["loader"]')
     local url=$(get_config_value $config_root'["url"]')
+    local url_exists=$(get_url_exists "${url}")
+    local url_md5=$(get_url_md5 "${url}" "${url_exists}")
 
-    if ! is_file_path "${path}" && [[ -z "${loader}" && "${type}" = "directory" ]]; then
+    printf "%-30s (%s) %5s <[%6s] %5s (%s) %s \n" \
+      "${path}" "${path_exists}" "${path_md5:0:5}" "${loader}" \
+      "${path_md5:0:5}" "${url_exists}" "${url}"
+
+    if [[ "${path_exists}" != '0' && "${loader}" = "mkdir" ]]; then
 
       echo "   - '${name}' create directory"
       # mkdir "${HOME}/${path}" 2>/dev/null
@@ -115,7 +137,7 @@ bq_run_files () {
 
     fi
 
-    if ! is_file_path "${path}" && [[ ${loader} = 'git' ]]; then
+    if [[ "${path_exists}" != '0' && "${loader}" = 'git' ]]; then
 
       echo "   - '${name}' clone with git"
       # git clone "${url}" "${HOME}/${path}" 2>/dev/null
@@ -123,15 +145,23 @@ bq_run_files () {
 
     fi
 
-    if ! is_file_path "${path}" && [[ ${loader} = 'curl' ]]; then
+    if [[ "${path_exists}" != '0' && ${loader} = 'curl' ]]; then
 
-      echo "   - '${name}' download with curl"
+      echo "   - '${name}' new downloaded with curl"
       # curl -LSso "${HOME}/${path}" "${url}" 1>/dev/null
       continue
 
     fi
 
-    if is_file_path "${path}" && is_file_type "${path}" "${type}" && [[ "${loader}" = "git" ]]; then
+    if [[ "${path_exists}" = '0' && "${url_exists}" = '0' && "${path_md5}" != "${url_md5}" && "${loader}" = 'curl' ]]; then
+
+      echo "   - '${name}' update with new version"
+      # curl -LSso "${HOME}/${path}" "${url}" # 1>/dev/null
+      continue
+
+    fi
+
+    if [[ "${path_exists}" = '0' && "${url_exists}" = '0' && "${loader}" = "git" ]]; then
 
       # git -C "${HOME}/${path}" remote update 1>/dev/null
       if [[ $(git -C "${HOME}/${path}" status -uno --porcelain) ]]; then

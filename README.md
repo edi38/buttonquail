@@ -2,4 +2,4 @@
 Running bird for configurations.
 
 ## Scripts
-- `bqvim` - configuring vim
+- `bqvim` configuring vim

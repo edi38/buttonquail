@@ -29,7 +29,7 @@ get_path_md5 () {
     echo ""
     return 1
   fi
-  echo $(md5 -q "${HOME}/${path}" 2>/dev/null)
+  echo $(md5sum -q "${HOME}/${path}" 2>/dev/null)
 }
 
 # Get status, whether the URL exists or not.
@@ -50,7 +50,7 @@ get_url_md5 () {
     echo ""
     return 1
   fi
-  echo $(curl -s "${url}" | md5)
+  echo $(curl -s "${url}" | md5sum)
 }
 
 existing_config_path () {
@@ -120,54 +120,54 @@ bq_run_files () {
     local path=$(get_config_value $config_root'["path"]')
     local path_exists=$(get_path_exists "${path}")
     local path_md5=$(get_path_md5 "${path}" "${path_exists}")
-    local loader=$(get_config_value $config_root'["loader"]')
+    local make=$(get_config_value $config_root'["make"]')
     local url=$(get_config_value $config_root'["url"]')
     local url_exists=$(get_url_exists "${url}")
     local url_md5=$(get_url_md5 "${url}" "${url_exists}")
 
     printf "%-30s (%s) %5s <[%6s] %5s (%s) %s \n" \
-      "${path}" "${path_exists}" "${path_md5:0:5}" "${loader}" \
+      "${path}" "${path_exists}" "${path_md5:0:5}" "${make}" \
       "${path_md5:0:5}" "${url_exists}" "${url}"
 
-    if [[ "${path_exists}" != '0' && "${loader}" = "mkdir" ]]; then
+    if [[ "${path_exists}" != '0' && "${make}" = "mkdir" ]]; then
 
       echo "   - '${name}' create directory"
-      # mkdir "${HOME}/${path}" 2>/dev/null
+      mkdir "${HOME}/${path}" 2>/dev/null
       continue
 
     fi
 
-    if [[ "${path_exists}" != '0' && "${loader}" = 'git' ]]; then
+    if [[ "${path_exists}" != '0' && "${make}" = 'git' ]]; then
 
       echo "   - '${name}' clone with git"
-      # git clone "${url}" "${HOME}/${path}" 2>/dev/null
+      git clone "${url}" "${HOME}/${path}" 2>/dev/null
       continue
 
     fi
 
-    if [[ "${path_exists}" != '0' && ${loader} = 'curl' ]]; then
+    if [[ "${path_exists}" != '0' && ${make} = 'curl' ]]; then
 
       echo "   - '${name}' new downloaded with curl"
-      # curl -LSso "${HOME}/${path}" "${url}" 1>/dev/null
+      curl -LSso "${HOME}/${path}" "${url}" 1>/dev/null
       continue
 
     fi
 
-    if [[ "${path_exists}" = '0' && "${url_exists}" = '0' && "${path_md5}" != "${url_md5}" && "${loader}" = 'curl' ]]; then
+    if [[ "${path_exists}" = '0' && "${url_exists}" = '0' && "${path_md5}" != "${url_md5}" && "${make}" = 'curl' ]]; then
 
       echo "   - '${name}' update with new version"
-      # curl -LSso "${HOME}/${path}" "${url}" # 1>/dev/null
+      curl -LSso "${HOME}/${path}" "${url}" # 1>/dev/null
       continue
 
     fi
 
-    if [[ "${path_exists}" = '0' && "${url_exists}" = '0' && "${loader}" = "git" ]]; then
+    if [[ "${path_exists}" = '0' && "${url_exists}" = '0' && "${make}" = "git" ]]; then
 
       # git -C "${HOME}/${path}" remote update 1>/dev/null
       if [[ $(git -C "${HOME}/${path}" status -uno --porcelain) ]]; then
 
         echo "   - '${name}' update via git"
-        # git -C "${HOME}/${path}" pull
+        git -C "${HOME}/${path}" pull
         continue
 
       fi
